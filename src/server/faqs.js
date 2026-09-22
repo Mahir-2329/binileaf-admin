@@ -37,6 +37,7 @@ async function renumber(sql) {
     from (
       select id, row_number() over (order by position, created_at) as rank
       from faqs
+      where deleted_at is null
     ) as ordered
     where ordered.id = f.id and f.position <> ordered.rank - 1
   `;
@@ -88,7 +89,7 @@ export async function saveFaq(input) {
     const [created] = await sql`
       insert into faqs (question, answer, topic, is_active, position)
       values (${question}, ${answer}, ${topic}, ${isActive},
-              (select coalesce(max(position), -1) + 1 from faqs))
+              (select coalesce(max(position), -1) + 1 from faqs where deleted_at is null))
       returning id, question
     `;
 
@@ -143,13 +144,19 @@ export async function moveFaq(id, direction) {
 
   const step = direction === 'up' ? -1 : 1;
 
-  const [row] = await sql`select id, position, question from faqs where id = ${id} limit 1`;
+  const [row] = await sql`
+    select id, position, question from faqs where id = ${id} and deleted_at is null limit 1
+  `;
   if (!row) return fail('That question is no longer there.');
 
   const [neighbour] =
     step === -1
-      ? await sql`select id, position from faqs where position < ${row.position} order by position desc limit 1`
-      : await sql`select id, position from faqs where position > ${row.position} order by position asc limit 1`;
+      ? await sql`select id, position from faqs
+           where position < ${row.position} and deleted_at is null
+           order by position desc limit 1`
+      : await sql`select id, position from faqs
+           where position > ${row.position} and deleted_at is null
+           order by position asc limit 1`;
 
   // Already at the end — a no-op, not an error. The buttons are disabled
   // there anyway; this is the guard for a double-tap that beat the re-render.
@@ -186,7 +193,12 @@ export async function deleteFaq(id) {
   const sql = getSql();
   if (!sql) return fail('No database is configured on this machine.');
 
-  const [removed] = await sql`delete from faqs where id = ${id} returning id, question`;
+  // Archived, not erased. Nothing in this admin removes a row.
+  const [removed] = await sql`
+    update faqs set deleted_at = now(), is_active = false, updated_at = now()
+    where id = ${id} and deleted_at is null
+    returning id, question
+  `;
   if (!removed) return fail('That question is no longer there.');
 
   await renumber(sql);

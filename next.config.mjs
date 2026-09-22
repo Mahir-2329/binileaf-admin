@@ -4,6 +4,11 @@ const nextConfig = {
   poweredByHeader: false,
   images: {
     formats: ['image/webp'],
+    // Photographs are served signed (`/media/…?k=…`). Next 16 refuses a query
+    // string on a local image unless a pattern says otherwise, and a pattern
+    // with no `search` allows any — the second entry keeps the default for
+    // everything else.
+    localPatterns: [{ pathname: '/media/**' }, { pathname: '/**', search: '' }],
     deviceSizes: [360, 640, 828, 1080, 1200, 1600],
     imageSizes: [48, 64, 96, 128, 200, 256, 320, 384],
   },

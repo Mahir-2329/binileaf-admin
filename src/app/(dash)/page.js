@@ -13,15 +13,21 @@ async function loadCounts() {
   const sql = getSql();
   const [row] = await sql`
     select
-      (select count(*) from menu_items where is_active)                       as items,
-      (select count(*) from menu_items where is_active and not is_available)  as unavailable,
-      (select count(*) from menu_groups where is_active)                      as categories,
-      (select count(*) from media)                                            as photographs,
-      (select count(*) from media where in_gallery)                           as in_gallery,
-      (select count(*) from offers where is_active)                           as offers,
+      (select count(*) from menu_items
+        where is_active and deleted_at is null)                               as items,
+      (select count(*) from menu_items
+        where is_active and not is_available and deleted_at is null)          as unavailable,
+      (select count(*) from menu_groups
+        where is_active and deleted_at is null)                               as categories,
+      (select count(*) from media where deleted_at is null)                    as photographs,
+      (select count(*) from media
+        where in_gallery and deleted_at is null)                              as in_gallery,
+      (select count(*) from offers
+        where is_active and deleted_at is null)                               as offers,
       (select count(*) from live_offers)                                      as live_offers,
-      (select count(*) from enquiries where status = 'new')                   as new_enquiries,
-      (select count(*) from faqs where is_active)                             as faqs
+      (select count(*) from enquiries
+        where status = 'new' and deleted_at is null)                          as new_enquiries,
+      (select count(*) from faqs where is_active and deleted_at is null)       as faqs
   `;
   return row;
 }

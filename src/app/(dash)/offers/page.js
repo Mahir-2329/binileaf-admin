@@ -16,13 +16,18 @@ async function load() {
   const sql = getSql();
 
   const [offers, groups, items] = await Promise.all([
-    sql`select * from offers`,
-    sql`select slug, title from menu_groups where is_active order by position, title`,
+    sql`select * from offers where deleted_at is null`,
+    sql`
+      select slug, title from menu_groups
+      where is_active and deleted_at is null
+      order by position, title
+    `,
     sql`
       select mi.slug, mi.name, mg.title as group_title
       from menu_items mi
       join menu_groups mg on mg.id = mi.group_id
       where mi.is_active and mi.slug is not null
+        and mi.deleted_at is null and mg.deleted_at is null
       order by mg.position, mi.position, mi.name
     `,
   ]);

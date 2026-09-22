@@ -31,8 +31,9 @@ async function loadMenu() {
       i.price as item_price, i.compare_price as item_compare_price, i.note as item_note,
       i.is_star, i.is_new, i.is_available, i.is_active as item_active
     from menu_sections s
-    left join menu_groups g on g.section_id = s.id
-    left join menu_items i on i.group_id = g.id
+    left join menu_groups g on g.section_id = s.id and g.deleted_at is null
+    left join menu_items i on i.group_id = g.id and i.deleted_at is null
+    where s.deleted_at is null
     order by s.position, s.created_at, g.position, g.created_at, i.position, i.created_at
   `;
 

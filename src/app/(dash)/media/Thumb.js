@@ -28,7 +28,7 @@ export default function Thumb({ photo, size = 'grid', className, priority = fals
       )}
     >
       <Image
-        src={photo.path}
+        src={photo.url ?? photo.path}
         alt=""
         width={photo.width}
         height={photo.height}

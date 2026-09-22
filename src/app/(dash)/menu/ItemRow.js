@@ -186,7 +186,7 @@ export default function ItemRow({
         <span className="hidden lg:inline-flex">
           <Confirm
             title={`Delete ${item.name}?`}
-            body="It goes from the card and from the database. If you only want it off for today, close this and use the cross on the row instead."
+            body="It comes off the card and out of this list. Nothing is erased — the row is archived, so the price and the history stay. If you only want it off for today, close this and use the cross on the row instead."
             confirmLabel="Delete item"
             onConfirm={() => onDelete(item)}
           >
@@ -224,7 +224,7 @@ export default function ItemRow({
 
         <Confirm
           title={`Delete ${item.name}?`}
-          body="It goes from the card and from the database. If you only want it off for today, close this and use the cross on the row instead."
+          body="It comes off the card and out of this list. Nothing is erased — the row is archived, so the price and the history stay. If you only want it off for today, close this and use the cross on the row instead."
           confirmLabel="Delete item"
           onConfirm={() => {
             setSheet(false);

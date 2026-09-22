@@ -41,7 +41,7 @@ function Slot({ slot, onChange, onClear, pending }) {
       >
         {slot.photo ? (
           <Image
-            src={slot.photo.path}
+            src={slot.photo.url ?? slot.photo.path}
             alt={slot.photo.alt || ''}
             width={slot.photo.width}
             height={slot.photo.height}
@@ -161,6 +161,7 @@ export default function PlacementsBoard({ slots, library }) {
               photo: photo
                 ? {
                     path: photo.path,
+                    url: photo.url,
                     width: photo.width,
                     height: photo.height,
                     alt: photo.alt,

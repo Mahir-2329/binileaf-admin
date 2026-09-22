@@ -30,6 +30,7 @@ export default async function FaqsPage() {
   const faqs = await sql`
     select id, question, answer, topic, position, is_active
     from faqs
+    where deleted_at is null
     order by position, created_at
   `;
 

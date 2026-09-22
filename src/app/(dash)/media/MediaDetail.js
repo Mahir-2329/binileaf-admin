@@ -206,8 +206,8 @@ export default function MediaDetail({ photo, usage, onClose, onSaved, onDeleted,
         .map((use) => use.name)
         .join(', ')}${usage.length > 4 ? `, and ${usage.length - 4} more` : ''}. Deleting it empties ${
         usage.length === 1 ? 'that one' : 'them'
-      } without asking again, and the site falls back to a default image there.`
-    : 'Nothing points at this photograph, so nothing on the site will change. The image itself is gone for good.';
+      } without asking again, and the site falls back to a default image there. The photograph itself is archived, not erased.`
+    : 'Nothing points at this photograph, so nothing on the site will change. The photograph is archived, not erased.';
 
   return (
     <Modal
@@ -222,7 +222,7 @@ export default function MediaDetail({ photo, usage, onClose, onSaved, onDeleted,
         <div className="min-w-0">
           <div className="flex max-h-[42svh] items-center justify-center border border-ink/15 bg-paper-shade p-2 lg:max-h-none">
             <Image
-              src={photo.path}
+              src={photo.url ?? photo.path}
               alt={photo.alt || ''}
               width={photo.width}
               height={photo.height}
@@ -336,7 +336,7 @@ export default function MediaDetail({ photo, usage, onClose, onSaved, onDeleted,
               <Confirm
                 title="Delete this photograph?"
                 body={consequence}
-                confirmLabel="Delete for good"
+                confirmLabel="Archive it"
                 onConfirm={remove}
               >
                 <button type="button" className="btn btn--danger" disabled={removing}>

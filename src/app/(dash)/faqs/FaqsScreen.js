@@ -245,7 +245,7 @@ export default function FaqsScreen({ faqs }) {
 
                   <Confirm
                     title="Delete this question?"
-                    body="It goes for good, and it stops appearing in the page's structured data and in /llms.txt. If you only want it off the site, hide it instead."
+                    body="It comes off the site, out of the page's structured data and out of /llms.txt. Nothing is erased — it is archived. If you only want it off the site, hide it instead."
                     confirmLabel="Delete question"
                     onConfirm={() => run(() => deleteFaq(faq.id), 'Question deleted.')}
                   >

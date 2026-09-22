@@ -57,7 +57,7 @@ function slugify(text) {
 async function uniqueSlug(sql, base) {
   const taken = await sql`
     select slug from offers
-    where slug = ${base} or slug like ${`${base}-%`}
+    where (slug = ${base} or slug like ${`${base}-%`}) and deleted_at is null
   `;
   const used = new Set(taken.map((row) => row.slug));
   if (!used.has(base)) return base;
@@ -284,7 +284,9 @@ export async function duplicateOffer(id) {
   const sql = getSql();
   if (!sql) return fail('No database is configured on this machine.');
 
-  const [source] = await sql`select * from offers where id = ${id} limit 1`;
+  const [source] = await sql`
+    select * from offers where id = ${id} and deleted_at is null limit 1
+  `;
   if (!source) return fail('That offer is no longer there.');
 
   const title = `${source.title} (copy)`.slice(0, 160);
@@ -346,7 +348,12 @@ export async function deleteOffer(id) {
   const sql = getSql();
   if (!sql) return fail('No database is configured on this machine.');
 
-  const [removed] = await sql`delete from offers where id = ${id} returning id, slug, title`;
+  // Archived, not erased: an offer that ran is part of the record of what ran.
+  const [removed] = await sql`
+    update offers set deleted_at = now(), is_active = false, updated_at = now()
+    where id = ${id} and deleted_at is null
+    returning id, slug, title
+  `;
   if (!removed) return fail('That offer is no longer there.');
 
   revalidatePath('/offers');

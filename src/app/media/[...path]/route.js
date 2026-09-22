@@ -1,4 +1,5 @@
 import { getSql, hasDatabase } from '@/lib/db';
+import { verifyMediaKey } from '@/lib/media-url';
 import { getSession } from '@/server/session';
 
 /**
@@ -11,9 +12,11 @@ import { getSession } from '@/server/session';
  *
  * This path is exempt from the middleware, because an <img> that is answered
  * with a redirect to an HTML login page is a broken image and nothing more.
- * The session is therefore checked here instead, and a request without one
- * gets 401 rather than a photograph. The site is where images are public, and
- * it serves them from its own tokenised route.
+ * The check happens here instead, and it takes either proof: the `?k=` the
+ * page signed for this exact path, which is what `next/image` can carry, or a
+ * session, for a person who pastes the path into the address bar. Neither one
+ * and the answer is 401, not a photograph. The site is where images are
+ * public, and it serves them from its own tokenised route.
  *
  * Responses are cached `private` and carry the row's checksum as an ETag, so a
  * replaced image invalidates itself, an unchanged one costs a 304, and no
@@ -35,16 +38,17 @@ function toBuffer(value) {
 const NO_STORE = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' };
 
 export async function GET(request, { params }) {
-  if (!(await getSession())) {
+  const { path: segments } = await params;
+  const publicPath = '/media/' + segments.map(decodeURIComponent).join('/');
+
+  const signed = verifyMediaKey(publicPath, request.nextUrl.searchParams.get('k'));
+  if (!signed && !(await getSession())) {
     return new Response('Sign in first.', { status: 401, headers: NO_STORE });
   }
 
   if (!hasDatabase) {
     return new Response('Media store is not configured.', { status: 503 });
   }
-
-  const { path: segments } = await params;
-  const publicPath = '/media/' + segments.map(decodeURIComponent).join('/');
 
   const sql = getSql();
   let rows;
@@ -53,7 +57,7 @@ export async function GET(request, { params }) {
     rows = await sql`
       select data, content_type, bytes, checksum
       from media
-      where path = ${publicPath} and is_active
+      where path = ${publicPath} and is_active and deleted_at is null
       limit 1
     `;
   } catch (error) {

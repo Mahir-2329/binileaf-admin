@@ -219,7 +219,7 @@ export default function OffersScreen({ offers, groups, items }) {
 
                       <Confirm
                         title={`Delete “${offer.title}”?`}
-                        body="The offer is removed for good, along with everything typed into it. If you only want it off the site, pause it instead."
+                        body="The offer comes off the site and out of this list. Nothing is erased — it is archived, so what ran when stays on the record. If you only want it off the site for now, pause it instead."
                         confirmLabel="Delete offer"
                         onConfirm={() => run(() => deleteOffer(offer.id), 'Offer deleted.')}
                       >

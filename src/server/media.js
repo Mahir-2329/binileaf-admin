@@ -4,6 +4,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { getSql, hasDatabase } from '@/lib/db';
+import { signMediaPath } from '@/lib/media-url';
 import { requireSession } from '@/server/session';
 import { recordChange } from '@/server/audit';
 
@@ -42,6 +43,9 @@ function shape(row) {
     id: row.id,
     slug: row.slug,
     path: row.path,
+    // What an <img> asks for. `path` stays the real one, because that is what
+    // an operator reads and what the placements table stores.
+    url: signMediaPath(row.path),
     width: row.width,
     height: row.height,
     alt: row.alt ?? '',
@@ -95,11 +99,14 @@ async function renumberGallery(sql) {
     set position = v.ord - 1
     from (
       select id, row_number() over (order by position, created_at, slug) as ord
-      from media where in_gallery
+      from media where in_gallery and deleted_at is null
     ) as v
     where m.id = v.id and m.position <> v.ord - 1
   `;
-  await sql`update media set position = 999 where not in_gallery and position <> 999`;
+  await sql`
+    update media set position = 999
+    where not in_gallery and position <> 999 and deleted_at is null
+  `;
 }
 
 /* ───────────────────────────────────────────────────────────── loading ──── */
@@ -111,6 +118,7 @@ export async function listMedia() {
   const sql = getSql();
   const rows = await sql`
     select ${sql.unsafe(LIST_COLUMNS)} from media
+    where deleted_at is null
     order by created_at desc, slug
   `;
   return rows.map(shape);
@@ -137,16 +145,16 @@ export async function listUsage() {
       from media_placements where media_slug is not null
     union all
       select media_slug, 'section', slug, title, null::text, position
-      from menu_sections where media_slug is not null
+      from menu_sections where media_slug is not null and deleted_at is null
     union all
       select media_slug, 'group', slug, title, null::text, position
-      from menu_groups where media_slug is not null
+      from menu_groups where media_slug is not null and deleted_at is null
     union all
       select media_slug, 'item', coalesce(slug, id::text), name, null::text, position
-      from menu_items where media_slug is not null
+      from menu_items where media_slug is not null and deleted_at is null
     union all
       select media_slug, 'offer', slug, title, null::text, priority
-      from offers where media_slug is not null
+      from offers where media_slug is not null and deleted_at is null
     order by kind, ord, name
   `;
 
@@ -171,7 +179,7 @@ export async function listPlacements() {
     select p.key, p.label, p.page, p.hint, p.aspect, p.media_slug, p.position,
            m.path, m.width, m.height, m.alt, m.orientation, m.is_active
     from media_placements p
-    left join media m on m.slug = p.media_slug
+    left join media m on m.slug = p.media_slug and m.deleted_at is null
     order by p.position, p.key
   `;
 
@@ -186,6 +194,7 @@ export async function listPlacements() {
     photo: row.path
       ? {
           path: row.path,
+          url: signMediaPath(row.path),
           width: row.width,
           height: row.height,
           alt: row.alt ?? '',
@@ -215,7 +224,9 @@ export async function saveMedia(id, patch) {
   const inGallery = Boolean(patch?.inGallery);
 
   const sql = getSql();
-  const [before] = await sql`select slug, in_gallery from media where id = ${id}::uuid`;
+  const [before] = await sql`
+    select slug, in_gallery from media where id = ${id}::uuid and deleted_at is null
+  `;
   if (!before) throw new Error('That photograph is no longer in the library.');
 
   await sql`
@@ -348,7 +359,9 @@ export async function deleteMedia(id) {
   if (!id) throw new Error('Which photograph?');
 
   const sql = getSql();
-  const [row] = await sql`select slug, path from media where id = ${id}::uuid`;
+  const [row] = await sql`
+    select slug, path from media where id = ${id}::uuid and deleted_at is null
+  `;
   if (!row) throw new Error('That photograph is already gone.');
 
   const [counts] = await sql`
@@ -360,7 +373,20 @@ export async function deleteMedia(id) {
       (select count(*) from offers          where media_slug = ${row.slug}) as offers
   `;
 
-  await sql`delete from media where id = ${id}::uuid`;
+  // The bytes stay. What goes is every reference to them, which the foreign
+  // keys used to do with `on delete set null` — an archive cascades nothing,
+  // so the slots that were showing this photograph are emptied here instead.
+  await sql`update media_placements set media_slug = null where media_slug = ${row.slug}`;
+  await sql`update menu_sections set media_slug = null where media_slug = ${row.slug}`;
+  await sql`update menu_groups   set media_slug = null where media_slug = ${row.slug}`;
+  await sql`update menu_items    set media_slug = null where media_slug = ${row.slug}`;
+  await sql`update offers        set media_slug = null where media_slug = ${row.slug}`;
+
+  await sql`
+    update media
+    set deleted_at = now(), is_active = false, in_gallery = false, updated_at = now()
+    where id = ${id}::uuid
+  `;
   await renumberGallery(sql);
 
   await afterWrite(session, {
@@ -387,7 +413,7 @@ export async function setPlacement(key, slug) {
   // The column is a foreign key, so a bad slug would be a raw Postgres error in
   // a toast. Check it here and say something a person can act on.
   if (value) {
-    const [photo] = await sql`select slug from media where slug = ${value}`;
+    const [photo] = await sql`select slug from media where slug = ${value} and deleted_at is null`;
     if (!photo) throw new Error('That photograph is not in the library any more.');
   }
 

@@ -58,9 +58,9 @@ export async function summariseReset() {
   const sql = getSql();
   const [current] = await sql`
     select
-      (select count(*) from menu_sections) as sections,
-      (select count(*) from menu_groups)   as groups,
-      (select count(*) from menu_items)    as items
+      (select count(*) from menu_sections where deleted_at is null) as sections,
+      (select count(*) from menu_groups   where deleted_at is null) as groups,
+      (select count(*) from menu_items    where deleted_at is null) as items
   `;
 
   const card = cardCounts();
@@ -80,9 +80,14 @@ export async function summariseReset() {
 /**
  * Rebuild the menu from the card.
  *
- * `delete from menu_sections` cascades to groups, items and variants, so one
- * statement clears the tree. It runs inside a transaction: a half-written menu
- * would be worse than the mess it was called to fix.
+ * The old tree is archived, never dropped: three updates stamp `deleted_at` on
+ * the sections, their categories and their items, and the card is inserted
+ * fresh beside them. The slugs come free the moment the old rows are archived,
+ * because the unique indexes only cover live rows — which is the whole reason
+ * this can run twice.
+ *
+ * It runs inside a transaction: a half-written menu would be worse than the
+ * mess it was called to fix.
  */
 export async function resetMenuToPrintedCard() {
   const session = await requireSession();
@@ -91,7 +96,22 @@ export async function resetMenuToPrintedCard() {
   const before = await summariseReset();
 
   await sql.transaction((tx) => {
-    const statements = [tx`delete from menu_sections`];
+    const statements = [
+      tx`
+        update menu_items as i
+        set deleted_at = now(), is_active = false, updated_at = now()
+        from menu_groups as g
+        where g.id = i.group_id and i.deleted_at is null
+      `,
+      tx`
+        update menu_groups set deleted_at = now(), is_active = false, updated_at = now()
+        where deleted_at is null
+      `,
+      tx`
+        update menu_sections set deleted_at = now(), is_active = false, updated_at = now()
+        where deleted_at is null
+      `,
+    ];
 
     // The Neon driver's transaction takes a prepared list, so the tree is
     // flattened here rather than inserted with awaited round trips.
@@ -109,7 +129,7 @@ export async function resetMenuToPrintedCard() {
           insert into menu_groups (section_id, slug, title, note, family, position)
           select id, ${group.id}, ${group.title}, ${group.note ?? null},
                  ${FAMILY[group.id] ?? 'ink'}, ${groupPos}
-          from menu_sections where slug = ${section.id}
+          from menu_sections where slug = ${section.id} and deleted_at is null
         `);
 
         group.items.forEach((item, itemPos) => {
@@ -117,7 +137,7 @@ export async function resetMenuToPrintedCard() {
             insert into menu_items (group_id, slug, name, price, is_star, note, position)
             select id, ${`${group.id}-${slugify(item.name)}`}, ${item.name},
                    ${item.price}, ${Boolean(item.star)}, ${item.note ?? null}, ${itemPos}
-            from menu_groups where slug = ${group.id}
+            from menu_groups where slug = ${group.id} and deleted_at is null
           `);
         });
       });

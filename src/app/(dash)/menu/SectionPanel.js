@@ -51,11 +51,11 @@ function Category({ section, group, first, last, open, selected, handlers }) {
   };
 
   const deleteBody = items.length
-    ? `This deletes the category and the ${plural(
+    ? `The category and the ${plural(
         items.length,
         'item',
         'items'
-      )} in it. To take it off the card without losing the prices, edit it and turn "On the menu" off instead.`
+      )} in it come off the card. Nothing is erased — they are archived. To keep it in this list but off the menu, edit it and turn "On the menu" off instead.`
     : 'The category is empty, so only the heading goes.';
 
   return (
@@ -375,11 +375,11 @@ export default function SectionPanel({ section, first, last, open, selected, han
 
         <Confirm
           title={`Delete ${section.title}?`}
-          body={`This deletes the whole column: ${plural(
+          body={`The whole column comes off the card: ${plural(
             groups.length,
             'category',
             'categories'
-          )} and ${plural(items, 'item', 'items')}. Hiding it instead keeps everything and takes it off the card.`}
+          )} and ${plural(items, 'item', 'items')}. They are archived, not erased. Hiding it instead keeps it in this list and off the card.`}
           confirmLabel="Delete the column"
           onConfirm={() => handlers.deleteSection(section)}
         >

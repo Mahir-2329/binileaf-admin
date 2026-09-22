@@ -61,10 +61,15 @@ function slugify(value) {
     .slice(0, 60);
 }
 
+// A slug belonging to a deleted row is free again — that is what the partial
+// unique indexes in the schema say, and these have to agree with them.
 const SLUG_TAKEN = {
-  section: (sql, slug) => sql`select id from menu_sections where slug = ${slug} limit 1`,
-  group: (sql, slug) => sql`select id from menu_groups where slug = ${slug} limit 1`,
-  item: (sql, slug) => sql`select id from menu_items where slug = ${slug} limit 1`,
+  section: (sql, slug) =>
+    sql`select id from menu_sections where slug = ${slug} and deleted_at is null limit 1`,
+  group: (sql, slug) =>
+    sql`select id from menu_groups where slug = ${slug} and deleted_at is null limit 1`,
+  item: (sql, slug) =>
+    sql`select id from menu_items where slug = ${slug} and deleted_at is null limit 1`,
 };
 
 /**
@@ -113,7 +118,7 @@ const compactItems = (sql, groupIds) => sql`
     select id,
            (row_number() over (partition by group_id order by position, created_at)) - 1 as rn
     from menu_items
-    where group_id = any(${groupIds}::uuid[])
+    where group_id = any(${groupIds}::uuid[]) and deleted_at is null
   ) as v
   where i.id = v.id and i.position is distinct from v.rn
 `;
@@ -125,7 +130,7 @@ const compactGroups = (sql, sectionIds) => sql`
     select id,
            (row_number() over (partition by section_id order by position, created_at)) - 1 as rn
     from menu_groups
-    where section_id = any(${sectionIds}::uuid[])
+    where section_id = any(${sectionIds}::uuid[]) and deleted_at is null
   ) as v
   where g.id = v.id and g.position is distinct from v.rn
 `;
@@ -212,7 +217,8 @@ export async function saveItem(_previous, form) {
     values
       (${groupId}, ${slug.slug}, ${name}, ${description}, ${price}, ${comparePrice}, ${note},
        ${isStar}, ${isNew}, ${isAvailable}, ${isActive},
-       (select coalesce(max(position) + 1, 0) from menu_items where group_id = ${groupId}))
+       (select coalesce(max(position) + 1, 0) from menu_items
+          where group_id = ${groupId} and deleted_at is null))
     returning id
   `;
 
@@ -286,14 +292,18 @@ export async function moveItems({ ids, groupId }) {
   if (!groupId) return fail('Choose the category to move these into.');
 
   const sql = getSql();
-  const from = await sql`select distinct group_id from menu_items where id = any(${ids}::uuid[])`;
+  const from = await sql`
+    select distinct group_id from menu_items
+    where id = any(${ids}::uuid[]) and deleted_at is null
+  `;
 
   // They land after whatever is already in the target, in the order they were
   // listed, so moving five rows keeps those five in the same sequence.
   await sql`
     update menu_items as i
     set group_id = ${groupId},
-        position = (select coalesce(max(position) + 1, 0) from menu_items where group_id = ${groupId})
+        position = (select coalesce(max(position) + 1, 0) from menu_items
+                      where group_id = ${groupId} and deleted_at is null)
                    + v.pos - 1,
         updated_at = now()
     from unnest(${ids}::uuid[]) with ordinality as v(id, pos)
@@ -345,7 +355,13 @@ export async function deleteItem({ id }) {
   if (!hasDatabase) return fail(NO_DB);
 
   const sql = getSql();
-  const [row] = await sql`delete from menu_items where id = ${id} returning name, group_id`;
+  // Archived, not erased: the row stays, off the card and out of every list.
+  const [row] = await sql`
+    update menu_items
+    set deleted_at = now(), is_active = false, updated_at = now()
+    where id = ${id} and deleted_at is null
+    returning name, group_id
+  `;
   if (!row) return fail('That item was already gone.');
 
   await compactItems(sql, [row.group_id]);
@@ -381,7 +397,9 @@ export async function saveGroup(_previous, form) {
   if (slug.error) return fail(slug.error, typed ? 'slug' : 'title');
 
   if (id) {
-    const [before] = await sql`select section_id from menu_groups where id = ${id}`;
+    const [before] = await sql`
+      select section_id from menu_groups where id = ${id} and deleted_at is null
+    `;
     if (!before) return fail('That category is no longer there — reload the page.');
 
     const moved = before.section_id !== sectionId;
@@ -395,7 +413,8 @@ export async function saveGroup(_previous, form) {
         note = ${note}, family = ${family}, is_active = ${isActive},
         position = case
           when section_id = ${sectionId} then position
-          else (select coalesce(max(position) + 1, 0) from menu_groups where section_id = ${sectionId})
+          else (select coalesce(max(position) + 1, 0) from menu_groups
+                  where section_id = ${sectionId} and deleted_at is null)
         end,
         updated_at = now()
       where id = ${id}
@@ -416,7 +435,8 @@ export async function saveGroup(_previous, form) {
   const [row] = await sql`
     insert into menu_groups (section_id, slug, title, note, family, is_active, position)
     values (${sectionId}, ${slug.slug}, ${title}, ${note}, ${family}, ${isActive},
-            (select coalesce(max(position) + 1, 0) from menu_groups where section_id = ${sectionId}))
+            (select coalesce(max(position) + 1, 0) from menu_groups
+              where section_id = ${sectionId} and deleted_at is null))
     returning id
   `;
 
@@ -460,9 +480,26 @@ export async function deleteGroup({ id }) {
 
   const sql = getSql();
   // Counted before the delete, so the log line says what actually went with it.
-  const [counted] = await sql`select count(*)::int as items from menu_items where group_id = ${id}`;
-  const [row] = await sql`delete from menu_groups where id = ${id} returning title, section_id`;
+  const [counted] = await sql`
+    select count(*)::int as items
+    from menu_items where group_id = ${id} and deleted_at is null
+  `;
+
+  const [row] = await sql`
+    update menu_groups
+    set deleted_at = now(), is_active = false, updated_at = now()
+    where id = ${id} and deleted_at is null
+    returning title, section_id
+  `;
   if (!row) return fail('That category was already gone.');
+
+  // The foreign keys used to cascade the delete. Nothing cascades an archive,
+  // so the items go down with it here.
+  await sql`
+    update menu_items
+    set deleted_at = now(), is_active = false, updated_at = now()
+    where group_id = ${id} and deleted_at is null
+  `;
 
   await compactGroups(sql, [row.section_id]);
 
@@ -514,7 +551,7 @@ export async function saveSection(_previous, form) {
   const [row] = await sql`
     insert into menu_sections (slug, title, kicker, blurb, is_active, position)
     values (${slug.slug}, ${title}, ${kicker}, ${blurb}, ${isActive},
-            (select coalesce(max(position) + 1, 0) from menu_sections))
+            (select coalesce(max(position) + 1, 0) from menu_sections where deleted_at is null))
     returning id
   `;
 
@@ -553,14 +590,33 @@ export async function deleteSection({ id }) {
   const sql = getSql();
   const [counts] = await sql`
     select
-      (select count(*)::int from menu_groups where section_id = ${id}) as groups,
+      (select count(*)::int from menu_groups
+        where section_id = ${id} and deleted_at is null) as groups,
       (select count(*)::int from menu_items i
          join menu_groups g on g.id = i.group_id
-        where g.section_id = ${id}) as items
+        where g.section_id = ${id} and i.deleted_at is null and g.deleted_at is null) as items
   `;
 
-  const [row] = await sql`delete from menu_sections where id = ${id} returning title`;
+  const [row] = await sql`
+    update menu_sections
+    set deleted_at = now(), is_active = false, updated_at = now()
+    where id = ${id} and deleted_at is null
+    returning title
+  `;
   if (!row) return fail('That part of the menu was already gone.');
+
+  // Both levels below it, by hand, for the same reason as above.
+  await sql`
+    update menu_items as i
+    set deleted_at = now(), is_active = false, updated_at = now()
+    from menu_groups as g
+    where g.id = i.group_id and g.section_id = ${id} and i.deleted_at is null
+  `;
+  await sql`
+    update menu_groups
+    set deleted_at = now(), is_active = false, updated_at = now()
+    where section_id = ${id} and deleted_at is null
+  `;
 
   // Sections have no parent, so the renumbering covers the whole table.
   await sql`
@@ -569,6 +625,7 @@ export async function deleteSection({ id }) {
     from (
       select id, (row_number() over (order by position, created_at)) - 1 as rn
       from menu_sections
+      where deleted_at is null
     ) as v
     where s.id = v.id and s.position is distinct from v.rn
   `;
