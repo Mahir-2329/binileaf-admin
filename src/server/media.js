@@ -4,6 +4,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { getSql, hasDatabase } from '@/lib/db';
+import { readCrop } from '@/lib/frame';
 import { signMediaPath } from '@/lib/media-url';
 import { requireSession } from '@/server/session';
 import { recordChange } from '@/server/audit';
@@ -176,7 +177,7 @@ export async function listPlacements() {
 
   const sql = getSql();
   const rows = await sql`
-    select p.key, p.label, p.page, p.hint, p.aspect, p.media_slug, p.position,
+    select p.key, p.label, p.page, p.hint, p.aspect, p.media_slug, p.crop, p.position,
            m.path, m.width, m.height, m.alt, m.orientation, m.is_active
     from media_placements p
     left join media m on m.slug = p.media_slug and m.deleted_at is null
@@ -191,6 +192,7 @@ export async function listPlacements() {
     aspect: row.aspect ?? '4/5',
     position: row.position,
     slug: row.media_slug ?? null,
+    crop: readCrop(row.crop),
     photo: row.path
       ? {
           path: row.path,
@@ -401,6 +403,46 @@ export async function deleteMedia(id) {
 
 /* ────────────────────────────────────────────────────────── placements ──── */
 
+/**
+ * How the photograph sits in the slot.
+ *
+ * A focal point and a zoom, written to `media_placements.crop`. Nothing is
+ * re-encoded: the same photograph can be framed one way here and another
+ * somewhere else, and there is no second copy of the bytes to keep in step.
+ * The site reads it through `frameStyle`, which is the same function the
+ * cropper previews with.
+ */
+export async function setPlacementCrop(key, crop) {
+  const session = await requireSession();
+  if (!hasDatabase) throw new Error('No database is configured.');
+  if (!key) throw new Error('Which slot?');
+
+  const clean = readCrop(crop);
+  const isDefault =
+    !clean || (clean.x === 50 && clean.y === 50 && clean.zoom === 1);
+
+  const value = isDefault ? null : JSON.stringify(clean);
+  const sql = getSql();
+
+  const [row] = await sql`
+    update media_placements
+    set crop = ${value}::jsonb, updated_at = now()
+    where key = ${key}
+    returning key
+  `;
+  if (!row) throw new Error('That slot is not in the registry.');
+
+  await afterWrite(session, {
+    action: isDefault ? 'placement.crop.reset' : 'placement.crop',
+    entity: 'media_placement',
+    entityId: key,
+    detail: isDefault ? {} : clean,
+  });
+
+  return clean;
+}
+
+
 /** Point a slot at a photograph, or pass null to empty it. */
 export async function setPlacement(key, slug) {
   const session = await requireSession();
@@ -417,9 +459,11 @@ export async function setPlacement(key, slug) {
     if (!photo) throw new Error('That photograph is not in the library any more.');
   }
 
+  // The crop belongs to the photograph that was in the slot, not to the slot:
+  // keeping it would frame a new picture by the old one's middle.
   const [row] = await sql`
     update media_placements
-    set media_slug = ${value}, updated_at = now()
+    set media_slug = ${value}, crop = null, updated_at = now()
     where key = ${key}
     returning key, label, page, hint, aspect, media_slug, position
   `;

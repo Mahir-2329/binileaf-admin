@@ -3,11 +3,13 @@
 import { useMemo, useState, useTransition } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { AlertTriangle, ImageOff, Loader2, Replace, X } from 'lucide-react';
+import { AlertTriangle, Crop, ImageOff, Loader2, Replace, X } from 'lucide-react';
 import { Empty, Section, useToast } from '@/components/ui';
+import { frameStyle } from '@/lib/frame';
 import { setPlacement } from '@/server/media';
 import { aspectRatio } from '../media/constants';
 import MediaPicker from '../media/MediaPicker';
+import CropDialog from './CropDialog';
 
 /**
  * Does the photograph fit the shape the slot wants?
@@ -30,7 +32,7 @@ function fitNote(slot) {
 
 /* ─────────────────────────────────────────────────────────────── slot ──── */
 
-function Slot({ slot, onChange, onClear, pending }) {
+function Slot({ slot, onChange, onClear, onCrop, pending }) {
   const note = fitNote(slot);
 
   return (
@@ -47,6 +49,7 @@ function Slot({ slot, onChange, onClear, pending }) {
             height={slot.photo.height}
             sizes="(max-width: 640px) 92vw, (max-width: 1024px) 45vw, 320px"
             className="h-full w-full object-cover"
+            style={frameStyle(slot)}
           />
         ) : (
           <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center">
@@ -61,6 +64,13 @@ function Slot({ slot, onChange, onClear, pending }) {
         <span className="absolute left-0 top-0 bg-ink px-2 py-1 text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-paper">
           {slot.aspect}
         </span>
+
+        {slot.crop ? (
+          <span className="absolute right-0 top-0 flex items-center gap-1 bg-brass px-2 py-1 text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-paper">
+            <Crop size={10} strokeWidth={2.2} aria-hidden="true" />
+            Framed
+          </span>
+        ) : null}
 
         {pending ? (
           <span className="absolute inset-0 flex items-center justify-center bg-paper/70">
@@ -113,10 +123,16 @@ function Slot({ slot, onChange, onClear, pending }) {
             {slot.photo ? 'Change' : 'Choose'}
           </button>
           {slot.photo ? (
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => onClear(slot)}>
-              <X size={12} strokeWidth={2} />
-              Empty it
-            </button>
+            <>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => onCrop(slot)}>
+                <Crop size={12} strokeWidth={1.9} />
+                Frame it
+              </button>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => onClear(slot)}>
+                <X size={12} strokeWidth={2} />
+                Empty it
+              </button>
+            </>
           ) : null}
         </div>
       </div>
@@ -133,6 +149,7 @@ export default function PlacementsBoard({ slots, library }) {
   // action revalidates behind it.
   const [rows, setRows] = useState(slots);
   const [picking, setPicking] = useState(null);
+  const [cropping, setCropping] = useState(null);
   const [pendingKey, setPendingKey] = useState(null);
   const [, startWrite] = useTransition();
 
@@ -158,6 +175,7 @@ export default function PlacementsBoard({ slots, library }) {
           ? {
               ...row,
               slug,
+              crop: null,
               photo: photo
                 ? {
                     path: photo.path,
@@ -226,12 +244,25 @@ export default function PlacementsBoard({ slots, library }) {
                 slot={slot}
                 pending={pendingKey === slot.key}
                 onChange={setPicking}
+                onCrop={setCropping}
                 onClear={(row) => write(row, null)}
               />
             ))}
           </ul>
         </Section>
       ))}
+
+      {cropping ? (
+        <CropDialog
+          key={cropping.key}
+          slot={cropping}
+          open
+          onClose={() => setCropping(null)}
+          onSaved={(key, crop) =>
+            setRows((current) => current.map((row) => (row.key === key ? { ...row, crop } : row)))
+          }
+        />
+      ) : null}
 
       <MediaPicker
         open={Boolean(picking)}
