@@ -1,0 +1,327 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════════════
+   BINILEAF ADMIN
+   The café's two inks, run as a tool: same palette and faces as the site so
+   a preview looks like the site, but denser, squarer and quicker to scan.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@theme {
+  --color-ink:          #152B4F;
+  --color-ink-deep:     #0C1A31;
+  --color-ink-wash:     #2C4573;
+  --color-paper:        #F6EEE0;
+  --color-paper-bright: #FDF8EF;
+  --color-paper-shade:  #E7D9C2;
+  --color-paper-dim:    #C6B8A1;
+  --color-pencil:       #6B5C46;
+  --color-stamp:        #C0452C;
+  --color-stamp-deep:   #A63A23;
+  --color-brass:        #B5822F;
+  --color-leaf:         #3F5A3F;
+
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-body:    var(--font-newsreader), Georgia, serif;
+  --font-ui:      var(--font-ui-face), "Helvetica Neue", Arial, system-ui, sans-serif;
+
+  --ease-out:  cubic-bezier(0.16, 1, 0.30, 1);
+  --dur-micro: 140ms;
+  --dur-base:  240ms;
+
+  --sidebar-w: 248px;
+  --topbar-h: 60px;
+}
+
+:root {
+  --rule: color-mix(in oklab, var(--color-ink) 14%, transparent);
+  --rule-strong: color-mix(in oklab, var(--color-ink) 28%, transparent);
+  --rule-navy: color-mix(in oklab, var(--color-paper) 16%, transparent);
+}
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body[data-lock='true'] { overflow: hidden; }
+
+  h1, h2, h3 { margin: 0; font-family: var(--font-display); font-weight: 600; }
+  p { margin: 0; }
+  a { color: inherit; text-decoration: none; }
+  img, svg { display: block; max-width: 100%; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  input, textarea, select { font: inherit; color: inherit; }
+  ul, ol { margin: 0; padding: 0; list-style: none; }
+  fieldset { margin: 0; padding: 0; border: 0; }
+
+  ::selection { background: var(--color-stamp); color: var(--color-paper); }
+
+  :focus-visible { outline: 2px solid var(--color-stamp); outline-offset: 2px; }
+  .on-navy :focus-visible { outline-color: var(--color-brass); }
+}
+
+@layer components {
+  /* ── type ──────────────────────────────────────────────────────────── */
+
+  .t-title { font-family: var(--font-display); font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem); line-height: 1.1; letter-spacing: -0.012em; }
+  .t-h2    { font-family: var(--font-display); font-size: 1.125rem; line-height: 1.25; }
+  .t-serif { font-family: var(--font-body); }
+
+  .t-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    line-height: 1.2;
+  }
+
+  .t-meta { font-size: 0.75rem; color: var(--color-pencil); }
+  .tabular { font-variant-numeric: tabular-nums lining-nums; }
+
+  /* ── surfaces ──────────────────────────────────────────────────────── */
+
+  .panel {
+    background: var(--color-paper-bright);
+    border: 1px solid var(--rule);
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .row:last-child { border-bottom: 0; }
+  .row:hover { background: color-mix(in oklab, var(--color-paper-shade) 40%, transparent); }
+
+  /* ── controls ──────────────────────────────────────────────────────── */
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 38px;
+    padding-inline: 16px;
+    border: 0;
+    border-radius: 0;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-micro) var(--ease-out),
+      color var(--dur-micro) var(--ease-out),
+      box-shadow var(--dur-micro) var(--ease-out),
+      opacity var(--dur-micro) var(--ease-out);
+  }
+  .btn:disabled { opacity: 0.4; pointer-events: none; }
+  .btn svg { flex: none; }
+
+  .btn--primary { background: var(--color-ink); color: var(--color-paper); }
+  .btn--primary:hover { background: var(--color-ink-deep); }
+
+  .btn--ghost { box-shadow: inset 0 0 0 1px var(--rule-strong); }
+  .btn--ghost:hover { background: var(--color-paper-shade); }
+
+  .btn--danger { color: var(--color-stamp-deep); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-stamp) 45%, transparent); }
+  .btn--danger:hover { background: var(--color-stamp); color: var(--color-paper); box-shadow: none; }
+
+  .btn--sm { height: 30px; padding-inline: 10px; font-size: 0.625rem; }
+  .btn--icon { width: 30px; height: 30px; padding: 0; }
+
+  /* ── quiet icon controls ───────────────────────────────────────────── */
+
+  /*
+    A row of actions should read as one object, not as six identical boxes.
+    The glyphs are drawn bare; only the one under the cursor takes a field.
+    Boxing each of them — which is what `.btn--ghost` does — turns a list of
+    eighty dishes into a wall of four hundred rectangles.
+  */
+  .iconb {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-pencil);
+    cursor: pointer;
+    transition:
+      background-color var(--dur-micro) var(--ease-out),
+      color var(--dur-micro) var(--ease-out),
+      opacity var(--dur-micro) var(--ease-out);
+  }
+  .iconb:hover {
+    background: color-mix(in oklab, var(--color-ink) 9%, transparent);
+    color: var(--color-ink);
+  }
+  .iconb:focus-visible { outline: 2px solid var(--color-stamp); outline-offset: -2px; }
+  .iconb:disabled { opacity: 0.22; pointer-events: none; }
+
+  /* A control that is carrying state, not offering an action. */
+  .iconb--on { color: var(--color-brass); }
+  .iconb--off { color: var(--color-stamp); }
+
+  .iconb--danger:hover {
+    background: color-mix(in oklab, var(--color-stamp) 14%, transparent);
+    color: var(--color-stamp-deep);
+  }
+
+  .actions { display: inline-flex; align-items: center; }
+
+  /*
+    Move, edit and delete are not needed at a glance. They stay in the DOM for
+    the keyboard and the screen reader, and are drawn when the row is pointed
+    at or focused — on a touch screen, where there is no pointing, always.
+  */
+  /* Descendant, not child: a control wrapped by a confirm dialog is one deeper. */
+  .actions .quiet { opacity: 0; }
+  .hit:hover .actions .quiet,
+  .hit:focus-within .actions .quiet,
+  .actions .quiet:focus-visible { opacity: 1; }
+
+  /*
+    Hiding on hover is a pointer idea. Below the editor's two-column breakpoint,
+    and on any touch screen, every control is drawn — the action strip wraps
+    onto a line of its own, which is where a thumb wants it anyway.
+  */
+  @media (hover: none), (max-width: 1023px) {
+    .iconb { width: 38px; height: 38px; }
+    .actions .quiet { opacity: 1; }
+  }
+
+  /* ── fields ────────────────────────────────────────────────────────── */
+
+  .field { display: block; }
+  .field__label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-pencil);
+  }
+  .field__req { color: var(--color-stamp); margin-left: 3px; }
+
+  .input {
+    width: 100%;
+    height: 38px;
+    padding-inline: 10px;
+    background: var(--color-paper-bright);
+    border: 1px solid var(--rule-strong);
+    border-radius: 0;
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color var(--dur-micro) var(--ease-out);
+  }
+  .input:focus { border-color: var(--color-stamp); }
+  .input::placeholder { color: color-mix(in oklab, var(--color-pencil) 55%, transparent); }
+
+  textarea.input { height: auto; min-height: 96px; padding-block: 8px; line-height: 1.55; resize: vertical; }
+  select.input { appearance: none; padding-right: 30px; cursor: pointer; }
+
+  .field__error { margin-top: 6px; font-size: 0.75rem; color: var(--color-stamp-deep); }
+  .field__hint { margin-top: 6px; font-size: 0.75rem; color: var(--color-pencil); }
+
+  /* ── chips, pills, flags ───────────────────────────────────────────── */
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding-inline: 11px;
+    border: 1px solid var(--rule-strong);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out);
+  }
+  .chip[aria-pressed='true'],
+  .chip[data-active='true'] {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    border-color: var(--color-ink);
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 7px;
+    border: 1px solid currentColor;
+    font-size: 0.5625rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .tag--stamp { color: var(--color-stamp); }
+  .tag--brass { color: var(--color-brass); }
+  .tag--leaf  { color: var(--color-leaf); }
+  .tag--muted { color: var(--color-pencil); }
+
+  /* ── toast ─────────────────────────────────────────────────────────── */
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    z-index: 80;
+    translate: -50% 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    box-shadow: 4px 4px 0 color-mix(in oklab, var(--color-ink) 22%, transparent);
+  }
+  .toast--error { background: var(--color-stamp-deep); }
+
+  /* ── sortable rows ─────────────────────────────────────────────────── */
+
+  .grab { cursor: grab; touch-action: none; }
+  .grab:active { cursor: grabbing; }
+  .dragging { opacity: 0.45; }
+  .drop-before { box-shadow: inset 0 2px 0 var(--color-stamp); }
+  .drop-after  { box-shadow: inset 0 -2px 0 var(--color-stamp); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
