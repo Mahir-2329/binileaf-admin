@@ -70,10 +70,41 @@ export const columnCount = (width) => (width >= 1280 ? 4 : width >= 768 ? 2 : 1)
  * of the list and the operator can watch a third of the card go blank, which
  * is exactly the thing this preview exists to show.
  *
- * Inside a two-wide section the groups run down `xl:grid-cols-2`, again in
- * row order, so group 0 sits in the left sub-column, group 1 in the right,
- * group 2 back on the left. Everywhere else the groups are a plain stack.
+ * Inside a two-wide section the categories are split into two stacks of
+ * roughly equal depth and read down the first, then the second — the way a
+ * printed card is read. They are stacks, not grid rows, so a short category
+ * never waits for a tall neighbour. Everywhere else the groups are a plain
+ * stack too.
  */
+
+/**
+ * The same split the public page makes — see `splitStacks` in
+ * `web/src/components/menu/MenuBrowser.js`. Weight, not count, so the two
+ * stacks end at about the same depth.
+ */
+export function splitStacks(groups) {
+  const weigh = (group) => 1 + (group.items?.length ?? 0);
+  const total = groups.reduce((sum, group) => sum + weigh(group), 0);
+
+  const left = [];
+  const right = [];
+  let filled = 0;
+
+  for (const group of groups) {
+    const weight = weigh(group);
+    const room = filled + weight / 2 <= total / 2 || left.length === 0;
+    const last = right.length === 0 && groups.indexOf(group) === groups.length - 1;
+
+    if (room && !last) {
+      left.push(group);
+      filled += weight;
+    } else {
+      right.push(group);
+    }
+  }
+
+  return [left, right];
+}
 export function planCard(sections, width) {
   const total = columnCount(width);
   const rows = [];
@@ -92,11 +123,14 @@ export function planCard(sections, width) {
     const start = cursor;
     const columns =
       span === 2
-        ? // Two sub-columns, filled the way a row-flow grid fills them.
-          [
-            { index: start + 1, groups: section.groups.filter((_, i) => i % 2 === 0) },
-            { index: start + 2, groups: section.groups.filter((_, i) => i % 2 === 1) },
-          ]
+        ? // Two stacks, split by depth, read down one and then the other.
+          (() => {
+            const [left, right] = splitStacks(section.groups);
+            return [
+              { index: start + 1, groups: left },
+              { index: start + 2, groups: right },
+            ];
+          })()
         : [{ index: start + 1, groups: section.groups }];
 
     row.cells.push({ section, span, start, columns });
